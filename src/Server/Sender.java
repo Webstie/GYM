@@ -1,3 +1,5 @@
+package Server;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -14,7 +16,7 @@ public class Sender {
         this.clientSocket = clientSocket;
         this.serverPort = serverPort;
         this.serverIP = serverIP;
-        System.out.println("Sender initialized on port " + serverIP + " " + serverPort);
+        System.out.println("Server.Sender initialized on port " + serverIP + " " + serverPort);
     }
 
     public void start() {

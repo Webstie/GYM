@@ -1,3 +1,5 @@
+package Server;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -10,12 +12,12 @@ public class Receiver {
 
     public Receiver(DatagramSocket serverSocket) throws SocketException {
         this.serverSocket = serverSocket;
-        System.out.println("Receiver initialized");
+        System.out.println("Server.Receiver initialized");
     }
 
     public void start() {
         isRunning = true;
-        System.out.println("Receiver has started");
+        System.out.println("Server.Receiver has started");
     }
 
     public boolean isRunning() {
@@ -90,6 +92,6 @@ public class Receiver {
             }
         }
 
-        System.out.println("Receiver stopped");
+        System.out.println("Server.Receiver stopped");
     }
 }

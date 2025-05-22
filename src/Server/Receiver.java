@@ -1,17 +1,18 @@
 package Server;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.SocketException;
+import java.net.*;
+import java.util.function.BiConsumer;
 
 public class Receiver {
 
-    private DatagramSocket serverSocket;
+    private DatagramSocket socket;
+    private BiConsumer<String, SocketAddress> messageHandler;
     private boolean isRunning = false;
 
-    public Receiver(DatagramSocket serverSocket) throws SocketException {
-        this.serverSocket = serverSocket;
+    public Receiver(DatagramSocket socket, BiConsumer<String, SocketAddress> messageHandler) throws SocketException {
+        this.socket = socket;
+        this.messageHandler = messageHandler;
         System.out.println("Server.Receiver initialized");
     }
 
@@ -20,78 +21,41 @@ public class Receiver {
         System.out.println("Server.Receiver has started");
     }
 
-    public boolean isRunning() {
-        return isRunning;
-    }
-
-    public void stopRunning() {
+    public void stop() {
         isRunning = false;
-        if (!serverSocket.isClosed()) {
-            serverSocket.close();
+        if (socket != null && !socket.isClosed()) {
+            socket.close();
+            System.out.println("Server.Receiver stopped");
         }
     }
 
-    /**
-     * Receives a single message if available and prints it to the terminal
-     * @return The received message as a string, or null if no message was available
-     */
-    public String receiveMessage() {
-        if (!isRunning || serverSocket.isClosed()) {
-            return null;
-        }
-
-        try {
-            byte[] receiveData = new byte[1024];
-            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-
-            // Set a short timeout to make this non-blocking
-            serverSocket.setSoTimeout(10);
-            serverSocket.receive(receivePacket);
-
-            // Extract the message as a string
-            String message = new String(receivePacket.getData(), 0, receivePacket.getLength());
-
-            // Print the message to the terminal
-            System.out.println("Message received from " + receivePacket.getSocketAddress() + ": " + message);
-
-            return message;
-        } catch (IOException e) {
-            // Timeout or socket closed - this is expected behavior for non-blocking
-            return null;
-        }
-    }
-
-    /**
-     * Blocking call that continuously receives messages and prints them to the terminal
-     * until stopRunning() is called
-     */
     public void receiveLoop() {
-        start();
+        start(); // 标记 isRunning = true
 
-        while (isRunning && !serverSocket.isClosed()) {
+        byte[] buffer = new byte[1024];
+        while (isRunning && !socket.isClosed()) {
             try {
-                byte[] receiveData = new byte[1024];
-                DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                socket.receive(packet);
 
-                // This will block until a packet is received
-                serverSocket.receive(receivePacket);
+                String message = new String(packet.getData(), 0, packet.getLength());
+                SocketAddress sender = packet.getSocketAddress();
 
-                // Extract the message as a string
-                String message = new String(receivePacket.getData(), 0, receivePacket.getLength());
+                System.out.println("收到消息: " + message + " 来自 " + sender);
 
-                // Print the message to the terminal
-                System.out.println("Message received from " + receivePacket.getSocketAddress() + ": " + message);
-            } catch (IOException e) {
+                // 将消息交给 GYMBookingServer 的 handleMessage 处理
+                if (messageHandler != null) {
+                    messageHandler.accept(message, sender);
+                }
+            } catch (SocketException e) {
+                // Socket 被关闭时跳出循环
                 if (isRunning) {
-                    e.printStackTrace();
+                    System.err.println("Socket 异常: " + e.getMessage());
                 }
-                // If socket is closed or not running, break out of the loop
-                if (serverSocket.isClosed() || !isRunning) {
-                    break;
-                }
+                break;
+            } catch (IOException e) {
+                System.err.println("接收数据失败: " + e.getMessage());
             }
         }
-
-        System.out.println("Server.Receiver stopped");
     }
 }

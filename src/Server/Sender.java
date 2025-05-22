@@ -1,57 +1,42 @@
 package Server;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
+import java.net.*;
 
 public class Sender {
+    private DatagramSocket socket;
 
-    private DatagramSocket clientSocket;
-    private int serverPort;
-    private InetAddress serverIP;
-    private boolean isRunning = false;
-
-    public Sender(DatagramSocket clientSocket, int serverPort, InetAddress serverIP) {
-        this.clientSocket = clientSocket;
-        this.serverPort = serverPort;
-        this.serverIP = serverIP;
-        System.out.println("Server.Sender initialized on port " + serverIP + " " + serverPort);
+    public Sender(DatagramSocket socket) {
+        this.socket = socket;
+        System.out.println("Server.Sender initialized");
     }
 
-    public void start() {
-        isRunning = true;
-    }
-
-    public boolean isRunning() {
-        return isRunning;
-    }
-
-    public void stopRunning() {
-        isRunning = false;
-    }
-
-    /**
-     * Sends a string message to the server
-     * @param message The string to send
-     * @return true if the message was sent successfully, false otherwise
-     */
-    public boolean sendMessage(String message) {
-        if (!isRunning) {
-            return false;
-        }
-
+    // 使用 SocketAddress 发送（推荐方式）
+    public boolean sendMessage(String message, SocketAddress address) {
         try {
-            byte[] buffer = message.getBytes();
-            DatagramPacket sendPacket = new DatagramPacket(buffer, buffer.length, serverIP, serverPort);
-            clientSocket.send(sendPacket);
-            System.out.println("Message sent: " + message);
+            byte[] data = message.getBytes();
+            DatagramPacket packet = new DatagramPacket(data, data.length, address);
+            socket.send(packet);
+            System.out.println("发送消息到 " + address + ": " + message);
             return true;
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("发送失败: " + e.getMessage());
             return false;
         }
     }
 
+    // 可选：使用 IP + 端口发送
+    public boolean sendMessage(String message, String ip, int port) {
+        try {
+            byte[] data = message.getBytes();
+            InetAddress inetAddress = InetAddress.getByName(ip);
+            DatagramPacket packet = new DatagramPacket(data, data.length, inetAddress, port);
+            socket.send(packet);
+            System.out.println("发送消息到 " + ip + ":" + port + " -> " + message);
+            return true;
+        } catch (IOException e) {
+            System.err.println("发送失败: " + e.getMessage());
+            return false;
+        }
+    }
 }
- 

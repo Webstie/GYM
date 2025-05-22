@@ -17,7 +17,6 @@ public class GYMBookingServer {
         Receiver receiver = new Receiver(socket, server::handleMessage);
         new Thread(receiver::receiveLoop).start();
     }
-
     public GymBookingServer(DatagramSocket socket) {
         this.socket = socket;
         this.sender = new Sender(socket);
@@ -25,9 +24,8 @@ public class GYMBookingServer {
     }
 
 
-
-
-
+    private Map<String, MeetingStatus> meetingMap = new HashMap<>();
+    private int meetingCounter = 1;
 
     public BookingRequest parseBookingRequest(String message, SocketAddress senderAddress) {
         try {
@@ -57,10 +55,6 @@ public class GYMBookingServer {
             return null;
         }
     }
-
-    private Map<String, MeetingStatus> meetingMap = new HashMap<>();
-    private int meetingCounter = 1;
-
     public void processBookingRequest(BookingRequest request) {
         if (!RoomManager.isRoomAvailable(request.date, request.time)) {
             // 无可用房间，发送 UNAVAILABLE
@@ -84,19 +78,115 @@ public class GYMBookingServer {
         // 可选：启动一个等待响应的计时器线程（用于超时重传）
         startInviteResponseTimer(meetingId);
     }
+    public void processInviteResponse(String message, SocketAddress senderAddress) {
+        String[] parts = message.split(" ");
+        if (parts.length < 2) return;
 
+        String responseType = parts[0]; // ACCEPT or REJECT
+        String meetingId = parts[1];    // MT#xxx
 
-
-
-
-    public void handleMessage(String message, SocketAddress senderAddress) {
-        if (message.startsWith("BOOK")) {
-            BookingRequest request = parseBookingRequest(message, senderAddress);
-            processBookingRequest(request);
-        } else if (message.startsWith("ACCEPT") || message.startsWith("REJECT")) {
-            processInviteResponse(message, senderAddress);
-        } else {
-            System.out.println("未知指令: " + message);
+        MeetingStatus status = meetingMap.get(meetingId);
+        if (status == null) {
+            System.out.println("未知会议编号: " + meetingId);
+            return;
         }
+
+        // 提取参与者 IP
+        String ip = senderAddress.toString().replace("/", "").split(":")[0];
+
+        // 记录响应
+        if (responseType.equals("ACCEPT")) {
+            status.accepted.add(ip);
+        } else if (responseType.equals("REJECT")) {
+            status.rejected.add(ip);
+        } else {
+            System.out.println("无效响应类型: " + responseType);
+            return;
+        }
+        private void finishMeetingDecision(MeetingStatus status) {
+            BookingRequest req = status.request;
+            String roomName = null;
+
+            if (status.accepted.size() >= req.minParticipants) {
+                // 预约成功
+                roomManager.reserveRoom(req.date, req.time);
+                roomName = roomManager.assignRoom();
+
+                String confirmMsg = String.format(
+                        "CONFIRM %s ROOM:%s PARTICIPANTS:%s",
+                        status.meetingId,
+                        roomName,
+                        String.join(",", status.accepted)
+                );
+
+                for (String ip : status.accepted) {
+                    sender.sendMessage(confirmMsg, ip);
+                }
+                sender.sendMessage(confirmMsg, req.requesterIP); // 发给请求者
+
+            } else {
+                // 预约失败，人数不足
+                String cancelMsg = String.format(
+                        "CANCEL %s REASON:Number of participants is lower than minimum required PARTICIPANTS:%s",
+                        status.meetingId,
+                        String.join(",", status.accepted)
+                );
+
+                for (String ip : status.accepted) {
+                    sender.sendMessage(cancelMsg, ip);
+                }
+                sender.sendMessage(cancelMsg, req.requesterIP); // 发给请求者
+            }
+
+            // 清理状态
+            meetingMap.remove(status.meetingId);
+        }
+
+
+        // 检查是否所有人都已回复
+        int totalReplied = status.accepted.size() + status.rejected.size();
+        int totalExpected = status.request.participantIPs.size();
+
+        if (totalReplied >= totalExpected) {
+            finishMeetingDecision(status);
+        }
+    }
+    private void finishMeetingDecision(MeetingStatus status) {
+        BookingRequest req = status.request;
+        String roomName = null;
+
+        if (status.accepted.size() >= req.minParticipants) {
+            // 预约成功
+            roomManager.reserveRoom(req.date, req.time);
+            roomName = roomManager.assignRoom();
+
+            String confirmMsg = String.format(
+                    "CONFIRM %s ROOM:%s PARTICIPANTS:%s",
+                    status.meetingId,
+                    roomName,
+                    String.join(",", status.accepted)
+            );
+
+            for (String ip : status.accepted) {
+                sender.sendMessage(confirmMsg, ip);
+            }
+            sender.sendMessage(confirmMsg, req.requesterIP); // 发给请求者
+
+        } else {
+            // 预约失败，人数不足
+            String cancelMsg = String.format(
+                    "CANCEL %s REASON:Number of participants is lower than minimum required PARTICIPANTS:%s",
+                    status.meetingId,
+                    String.join(",", status.accepted)
+            );
+
+            for (String ip : status.accepted) {
+                sender.sendMessage(cancelMsg, ip);
+            }
+            sender.sendMessage(cancelMsg, req.requesterIP); // 发给请求者
+        }
+
+        // 清理状态
+        meetingMap.remove(status.meetingId);
     }
 }

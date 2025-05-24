@@ -11,40 +11,42 @@ public class MeetingScheduler {
         int serverPort = 9876;
         InetAddress serverIP = InetAddress.getByName("127.0.0.1");
 
-        // 创建共享 socket
+        // Create shared UDP socket
         DatagramSocket socket = new DatagramSocket(clientPort);
 
-        // 初始化 Sender 和 Receiver
+        // Initialize Sender and Receiver
         Sender sender = new Sender(socket, serverPort, serverIP);
         Receiver receiver = new Receiver(socket);
 
         sender.start();
         receiver.start();
 
-        // 构造请求消息
+        // Build the BOOK request message
         String requestID = "RQ#100";
-        List<String> ips = Arrays.asList("127.0.0.1");
+        List<String> ips = Arrays.asList("127.0.0.1");  // Participant IPs
         String bookRequest = String.format(
                 "BOOK %s DATE:2025-05-26 TIME:10:00 ACTIVITY:PingPong IPS:%s MIN:1",
                 requestID, String.join(",", ips)
         );
 
+        // Send booking request to server
         sender.sendMessage(bookRequest);
 
-        // 启动接收线程（自动处理 INVITE，自动回复 ACCEPT）
+        // Start a background thread to listen and respond automatically
         new Thread(() -> {
             while (receiver.isRunning()) {
                 String message = receiver.receiveMessage();
                 if (message == null) continue;
 
                 if (message.startsWith("INVITE")) {
-                    String meetingId = message.split(" ")[1];  // 正确提取 MT#2、MT#3……
+                    // Extract meeting ID and send ACCEPT
+                    String meetingId = message.split(" ")[1];
                     String acceptMsg = "ACCEPT " + meetingId;
                     sender.sendMessage(acceptMsg);
-
                 }
 
                 if (message.startsWith("CONFIRM") || message.startsWith("CANCEL")) {
+                    // Print final result and terminate client
                     System.out.println("Meeting final result: " + message);
                     sender.stopRunning();
                     receiver.stopRunning();

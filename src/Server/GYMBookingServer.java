@@ -20,7 +20,7 @@ public class GYMBookingServer {
         DatagramSocket socket = new DatagramSocket(port);
 
         GYMBookingServer server = new GYMBookingServer(socket);
-        System.out.println("GBMS 启动，监听端口: " + port);
+        System.out.println("GBMS started, listening on port: " + port);
         server.start();
     }
 
@@ -35,14 +35,12 @@ public class GYMBookingServer {
             this.receiver = new Receiver(socket, this::handleMessage);
             new Thread(receiver::receiveLoop).start();
         } catch (SocketException e) {
-            System.err.println("启动 Receiver 失败：" + e.getMessage());
+            System.err.println("Failed to start receiver: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-
     public void handleMessage(String message, SocketAddress senderAddress) {
-
         if (senderAddress.toString().contains("127.0.0.1:9876")) return;
 
         if (message.startsWith("BOOK")) {
@@ -53,7 +51,7 @@ public class GYMBookingServer {
         } else if (message.startsWith("ACCEPT") || message.startsWith("REJECT")) {
             processInviteResponse(message, senderAddress);
         } else {
-            System.out.println("收到未知格式消息: " + message);
+            System.out.println("Received unknown message format: " + message);
         }
     }
 
@@ -64,8 +62,8 @@ public class GYMBookingServer {
             String date = parts[2].split(":")[1];
             String time = parts[3].split(":")[1];
             String activity = parts[4].split(":")[1];
-            String[] ips = parts[5].split(":")[1].split(",");  // ✅ 先解析 IPs
-            int min = Integer.parseInt(parts[6].split(":")[1]); // ✅ 再解析 MIN
+            String[] ips = parts[5].split(":")[1].split(",");
+            int min = Integer.parseInt(parts[6].split(":")[1]);
             List<String> participantIPs = Arrays.asList(ips);
 
             String requesterIP = senderAddress.toString();
@@ -74,12 +72,11 @@ public class GYMBookingServer {
 
             return new BookingRequest(requestId, date, time, activity, participantIPs, min, requesterIP);
         } catch (Exception e) {
-            System.out.println("解析 BOOK 请求失败: " + message);
+            System.out.println("Failed to parse BOOK request: " + message);
             e.printStackTrace();
             return null;
         }
     }
-
 
     public void processBookingRequest(BookingRequest request) {
         if (!roomManager.isRoomAvailable(request.date, request.time)) {
@@ -109,6 +106,7 @@ public class GYMBookingServer {
 
         MeetingStatus status = meetingMap.get(meetingId);
         if (status == null) return;
+
         String ip = senderAddress.toString().replace("/", "").split(":")[0];
         if (status.responded.contains(ip)) return;
 
@@ -123,29 +121,22 @@ public class GYMBookingServer {
         if (status.finalized) return;
         status.finalized = true;
 
-        // 其余逻辑
-
-
         BookingRequest req = status.request;
         String roomName = null;
 
         if (status.accepted.size() >= req.minParticipants) {
-//            roomManager.reserveRoom(req.date, req.time);
             roomName = roomManager.assignRoom(req.date, req.time);
             String msg = String.format("CONFIRM %s ROOM:%s PARTICIPANTS:%s",
                     status.meetingId, roomName, String.join(",", status.accepted));
             for (String ip : status.accepted) {
                 sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
             }
-//                sender.sendMessage(msg, new InetSocketAddress(req.requesterIP, 9877));
         } else {
             String msg = String.format("CANCEL %s REASON:Number of participants is lower than minimum required PARTICIPANTS:%s",
                     status.meetingId, String.join(",", status.accepted));
             for (String ip : status.accepted) {
                 sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
             }
-//                sender.sendMessage(msg, new InetSocketAddress(req.requesterIP, 9877));
-
             meetingMap.remove(status.meetingId);
         }
     }
@@ -162,7 +153,7 @@ public class GYMBookingServer {
                         if (status.responded.contains(ip)) continue;
                         int retry = status.retryCount.getOrDefault(ip, 0);
                         if (retry >= MAX_RETRY) {
-                            System.out.println("超过最大重试次数，视为拒绝：" + ip);
+                            System.out.println("Max retries reached, treating as rejection: " + ip);
                             status.markResponse(ip, false);
                             continue;
                         }
@@ -180,7 +171,7 @@ public class GYMBookingServer {
                     }
                 }
             } catch (InterruptedException e) {
-                System.err.println("重传线程被打断: " + e.getMessage());
+                System.err.println("Retry thread interrupted: " + e.getMessage());
             }
         }).start();
     }

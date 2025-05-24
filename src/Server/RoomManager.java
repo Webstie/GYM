@@ -3,18 +3,25 @@ package Server;
 import java.util.*;
 
 public class RoomManager {
-    // 假设有 3 个房间 GymA/B/C
+    // Example room list: GymA, GymB, GymC
     private List<String> roomList = Arrays.asList("GymA", "GymB", "GymC");
 
-    // 使用 Map 存储已预约房间 key: "2025-05-25_14:00" → 已分配的房间名列表
+    // Stores reserved rooms for each time slot: key = "YYYY-MM-DD_HH:MM" → Set of room names
     private Map<String, Set<String>> reserved = new HashMap<>();
 
+    /**
+     * Checks if at least one room is available for the given date and time
+     */
     public synchronized boolean isRoomAvailable(String date, String time) {
         String key = date + "_" + time;
         Set<String> reservedRooms = reserved.getOrDefault(key, new HashSet<>());
         return reservedRooms.size() < roomList.size();
     }
 
+    /**
+     * Assigns and reserves an available room for the given date and time.
+     * Returns the room name, or null if no room is available.
+     */
     public synchronized String assignRoom(String date, String time) {
         String key = date + "_" + time;
         Set<String> reservedRooms = reserved.getOrDefault(key, new HashSet<>());
@@ -23,15 +30,10 @@ public class RoomManager {
             if (!reservedRooms.contains(room)) {
                 reservedRooms.add(room);
                 reserved.put(key, reservedRooms);
-                System.out.println(room);
                 return room;
             }
         }
 
-        return null; // 没有空房间（理论上不应该到这里）
-    }
-
-    public synchronized void reserveRoom(String date, String time) {
-        assignRoom(date, time); // 简单调用
+        return null; // No available room (should not happen under normal conditions)
     }
 }

@@ -42,6 +42,9 @@ public class GYMBookingServer {
 
 
     public void handleMessage(String message, SocketAddress senderAddress) {
+
+        if (senderAddress.toString().contains("127.0.0.1:9876")) return;
+
         if (message.startsWith("BOOK")) {
             BookingRequest request = parseBookingRequest(message, senderAddress);
             if (request != null) {
@@ -61,8 +64,8 @@ public class GYMBookingServer {
             String date = parts[2].split(":")[1];
             String time = parts[3].split(":")[1];
             String activity = parts[4].split(":")[1];
-            int min = Integer.parseInt(parts[5].split(":")[1]);
-            String[] ips = parts[6].split(":")[1].split(",");
+            String[] ips = parts[5].split(":")[1].split(",");  // ✅ 先解析 IPs
+            int min = Integer.parseInt(parts[6].split(":")[1]); // ✅ 再解析 MIN
             List<String> participantIPs = Arrays.asList(ips);
 
             String requesterIP = senderAddress.toString();
@@ -77,10 +80,11 @@ public class GYMBookingServer {
         }
     }
 
+
     public void processBookingRequest(BookingRequest request) {
         if (!roomManager.isRoomAvailable(request.date, request.time)) {
             String msg = "UNAVAILABLE RQ#" + request.requestId;
-            sender.sendMessage(msg, new InetSocketAddress(request.requesterIP, 9876));
+            sender.sendMessage(msg, new InetSocketAddress(request.requesterIP, 9877));
             return;
         }
 
@@ -91,7 +95,7 @@ public class GYMBookingServer {
         for (String ip : request.participantIPs) {
             String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s",
                     meetingId, request.date, request.time, request.activityType, request.requesterIP);
-            sender.sendMessage(msg, new InetSocketAddress(ip, 9876));
+            sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
         }
 
         startInviteResponseTimer(meetingId);
@@ -100,13 +104,11 @@ public class GYMBookingServer {
     public void processInviteResponse(String message, SocketAddress senderAddress) {
         String[] parts = message.split(" ");
         if (parts.length < 2) return;
-
         String responseType = parts[0];
         String meetingId = parts[1];
 
         MeetingStatus status = meetingMap.get(meetingId);
         if (status == null) return;
-
         String ip = senderAddress.toString().replace("/", "").split(":")[0];
         if (status.responded.contains(ip)) return;
 
@@ -118,28 +120,34 @@ public class GYMBookingServer {
     }
 
     private void finishMeetingDecision(MeetingStatus status) {
+        if (status.finalized) return;
+        status.finalized = true;
+
+        // 其余逻辑
+
+
         BookingRequest req = status.request;
         String roomName = null;
 
         if (status.accepted.size() >= req.minParticipants) {
-            roomManager.reserveRoom(req.date, req.time);
+//            roomManager.reserveRoom(req.date, req.time);
             roomName = roomManager.assignRoom(req.date, req.time);
             String msg = String.format("CONFIRM %s ROOM:%s PARTICIPANTS:%s",
                     status.meetingId, roomName, String.join(",", status.accepted));
             for (String ip : status.accepted) {
-                sender.sendMessage(msg, new InetSocketAddress(ip, 9876));
+                sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
             }
-            sender.sendMessage(msg, new InetSocketAddress(req.requesterIP, 9876));
+//                sender.sendMessage(msg, new InetSocketAddress(req.requesterIP, 9877));
         } else {
             String msg = String.format("CANCEL %s REASON:Number of participants is lower than minimum required PARTICIPANTS:%s",
                     status.meetingId, String.join(",", status.accepted));
             for (String ip : status.accepted) {
-                sender.sendMessage(msg, new InetSocketAddress(ip, 9876));
+                sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
             }
-            sender.sendMessage(msg, new InetSocketAddress(req.requesterIP, 9876));
-        }
+//                sender.sendMessage(msg, new InetSocketAddress(req.requesterIP, 9877));
 
-        meetingMap.remove(status.meetingId);
+            meetingMap.remove(status.meetingId);
+        }
     }
 
     public void startInviteResponseTimer(String meetingId) {
@@ -162,7 +170,7 @@ public class GYMBookingServer {
                         String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s",
                                 status.meetingId, status.request.date, status.request.time,
                                 status.request.activityType, status.request.requesterIP);
-                        sender.sendMessage(msg, new InetSocketAddress(ip, 9876));
+                        sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
                         status.retryCount.put(ip, retry + 1);
                     }
 

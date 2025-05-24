@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.*;
 
 public class MeetingStatus {
+    public volatile boolean finalized = false;
     public String meetingId;
     public BookingRequest request;
     public Set<String> accepted = new HashSet<>();

@@ -23,6 +23,7 @@ public class RoomManager {
             if (!reservedRooms.contains(room)) {
                 reservedRooms.add(room);
                 reserved.put(key, reservedRooms);
+                System.out.println(room);
                 return room;
             }
         }

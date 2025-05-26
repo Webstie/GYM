@@ -58,9 +58,8 @@ public class MeetingScheduler {
                 if (message.startsWith("CONFIRM") || message.startsWith("CANCEL")) {
                     if (messageListener != null)
                         messageListener.accept("🏁 会议完成: " + message);
-                    sender.stopRunning();
-                    receiver.stopRunning();
-                    break;
+//                    sender.stopRunning();
+//                    receiver.stopRunning();
                 }
             }
         }).start();
@@ -79,6 +78,15 @@ public class MeetingScheduler {
         if (messageListener != null)
             messageListener.accept("📤 已发送: " + bookRequest);
     }
+
+    public void sendCancelRequest(String meetingId) {
+        String cancelMsg = "CANCEL " + meetingId;
+        sender.sendMessage(cancelMsg);
+        if (messageListener != null) {
+            messageListener.accept("📤 已发送: " + cancelMsg);
+        }
+    }
+
 
     /**
      * 设置监听器，将内部消息回传给 GUI 控制台或其他输出逻辑

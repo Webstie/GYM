@@ -48,6 +48,9 @@ public class GYMBookingServer {
             if (request != null) {
                 processBookingRequest(request);
             }
+        } else if (message.startsWith("CANCEL")) {
+            processCancelRequest(message);
+
         } else if (message.startsWith("ACCEPT") || message.startsWith("REJECT")) {
             processInviteResponse(message, senderAddress);
         } else {
@@ -97,6 +100,35 @@ public class GYMBookingServer {
 
         startInviteResponseTimer(meetingId);
     }
+
+    public void processCancelRequest(String message) {
+        try {
+            String[] parts = message.trim().split(" ");
+            if (parts.length < 2 || !parts[0].equals("CANCEL")) return;
+
+            String meetingId = parts[1];
+            MeetingStatus status = meetingMap.get(meetingId);
+            if (status == null || !status.finalized) return;
+
+            System.out.println("Organizer requested cancellation for " + meetingId);
+
+            // 通知所有已确认的参与者
+            String cancelMsg = "CANCEL " + meetingId + " REASON:Cancelled by organizer";
+            for (String ip : status.accepted) {
+                sender.sendMessage(cancelMsg, new InetSocketAddress(ip, 9877));
+            }
+
+            // 移除会议室占用
+            RoomManager.removeRoom(meetingId);
+
+            // 清除会议记录
+            meetingMap.remove(meetingId);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 
     public void processInviteResponse(String message, SocketAddress senderAddress) {
         String[] parts = message.split(" ");

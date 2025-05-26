@@ -3,37 +3,47 @@ package Server;
 import java.util.*;
 
 public class RoomManager {
-    // Example room list: GymA, GymB, GymC
-    private List<String> roomList = Arrays.asList("GymA", "GymB", "GymC");
+    // Static room list
+    private static final List<String> roomList = Arrays.asList("GymA", "GymB", "GymC");
 
-    // Stores reserved rooms for each time slot: key = "YYYY-MM-DD_HH:MM" → Set of room names
-    private Map<String, Set<String>> reserved = new HashMap<>();
+    // key = meetingId, value = assigned room
+    private static final Map<String, String> meetingToRoom = new HashMap<>();
 
     /**
-     * Checks if at least one room is available for the given date and time
+     * Checks if at least one room is available
      */
     public synchronized boolean isRoomAvailable(String date, String time) {
-        String key = date + "_" + time;
-        Set<String> reservedRooms = reserved.getOrDefault(key, new HashSet<>());
-        return reservedRooms.size() < roomList.size();
+        return meetingToRoom.size() < roomList.size();
     }
 
     /**
-     * Assigns and reserves an available room for the given date and time.
-     * Returns the room name, or null if no room is available.
+     * Assigns and reserves an available room. Ignores date/time, keeps signature for compatibility.
      */
     public synchronized String assignRoom(String date, String time) {
-        String key = date + "_" + time;
-        Set<String> reservedRooms = reserved.getOrDefault(key, new HashSet<>());
-
+        String meetingId = "MT#" + (meetingToRoom.size() + 1); // or pass externally
         for (String room : roomList) {
-            if (!reservedRooms.contains(room)) {
-                reservedRooms.add(room);
-                reserved.put(key, reservedRooms);
+            if (!meetingToRoom.containsValue(room)) {
+                meetingToRoom.put(meetingId, room);
+                System.out.println("Assigned room " + room + " to " + meetingId);
                 return room;
             }
         }
+        return null;
+    }
 
-        return null; // No available room (should not happen under normal conditions)
+    /**
+     * Releases the room assigned to the meeting
+     */
+    public static synchronized void removeRoom(String meetingId) {
+        if (!meetingToRoom.containsKey(meetingId)) return;
+        String room = meetingToRoom.remove(meetingId);
+        System.out.println("Room " + room + " released from meeting " + meetingId);
+    }
+
+    /**
+     * Optional: get room by meeting ID
+     */
+    public static synchronized String getRoom(String meetingId) {
+        return meetingToRoom.get(meetingId);
     }
 }

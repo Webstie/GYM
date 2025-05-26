@@ -37,11 +37,13 @@ public class Sender {
      * @return true if the message was sent successfully, false otherwise
      */
     public boolean sendMessage(String message) {
+        System.out.println("sending" + message);
         if (!isRunning) {
             return false;
         }
 
         try {
+            System.out.println("trying to send message");
             byte[] buffer = message.getBytes();
             DatagramPacket sendPacket = new DatagramPacket(buffer, buffer.length, serverIP, serverPort);
             clientSocket.send(sendPacket);

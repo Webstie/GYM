@@ -6,7 +6,7 @@ import java.util.*;
 public class GYMBookingServer {
 
     private static final int MAX_RETRY = 3;
-    private static final int RETRY_INTERVAL_MS = 3000;
+    private static final int RETRY_INTERVAL_MS = 50;
 
     private DatagramSocket socket;
     private Sender sender;
@@ -23,8 +23,8 @@ public class GYMBookingServer {
         GYMBookingServer server = new GYMBookingServer(socket);
         System.out.println("GBMS started, listening on port: " + port);
         server.start();
-        Thread.sleep(10000);
-        server.makeRoomUnavailable("GymA");
+//        Thread.sleep(10000);
+//        server.makeRoomUnavailable("GymA");
     }
 
 
@@ -58,9 +58,51 @@ public class GYMBookingServer {
             processAddRequest(message, senderAddress);
         } else if (message.startsWith("ACCEPT") || message.startsWith("REJECT")) {
             processInviteResponse(message, senderAddress);
+
+        } else if (message.startsWith("WITHDRAW")) {
+            processWithdrawRequest(message, senderAddress);
         } else {
             System.out.println("Received unknown message format: " + message);
         }
+    }
+
+    public void processWithdrawRequest(String message, SocketAddress senderAddress) {
+        String[] parts = message.split(" ");
+        String meetingId = parts[1];
+
+        MeetingStatus status = meetingMap.get(meetingId);
+        if (status == null || !status.finalized) return;
+
+        String ip = senderAddress.toString().replace("/","");
+
+        // 1. Remove from accepted/responded
+        status.accepted.remove(ip);
+        status.responded.remove(ip);
+        status.participantStatus.replace(ip, "WITHDRAWN");
+
+        // 2. Notify host
+        String notifyMsg = String.format("WITHDRAW_NOTIFY %s FROM:%s", meetingId, ip);
+        sender.sendMessage(notifyMsg, status.host);
+
+        // 3. Check if still valid
+        if (status.accepted.size() >= status.request.minParticipants) return;
+
+        System.out.println("⚠️ Not enough participants after withdrawal. Trying reinvite...");
+        // 4. Re-invite all who never accepted or already rejected
+        for (String candidate : status.request.participantIPs) {
+            if (!status.accepted.contains(candidate) && !"WITHDRAWN".equals(status.participantStatus.get(candidate))) {
+                // Reset retry & responded
+                status.retryCount.put(candidate, 0);
+                status.responded.remove(candidate);
+
+                String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s",
+                        meetingId, status.request.date, status.request.time,
+                        status.request.activityType, status.request.requesterIP);
+                sender.sendMessage(msg, parseAddress(candidate));
+            }
+        }
+        status.finalized = false;
+        // Let retry loop run again — don’t finalize here
     }
 
     public void processAddRequest(String message, SocketAddress senderAddress) {
@@ -161,7 +203,7 @@ public class GYMBookingServer {
         MeetingStatus status = meetingMap.get(meetingId);
         if (status == null) return;
 
-        String ip = senderAddress.toString();
+        String ip = senderAddress.toString().replace("/","");
         if (status.responded.contains(ip)) return;
 
         status.markResponse(ip, responseType.equals("ACCEPT"));

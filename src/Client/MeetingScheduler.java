@@ -101,6 +101,14 @@ public class MeetingScheduler {
         }
     }
 
+    public void sendWithdrawRequest(String meetingId) {
+        String withdrawMsg = "WITHDRAW " + meetingId;
+        sender.sendMessage(withdrawMsg);
+        if (messageListener != null) {
+            messageListener.accept("📤 Sent: " + withdrawMsg);
+        }
+    }
+
     /**
      * Set listener for passing messages back to GUI console or external output
      */

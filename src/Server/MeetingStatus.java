@@ -34,7 +34,13 @@ public class MeetingStatus {
     }
 
     public boolean allResponded() {
-        return responded.size() >= request.participantIPs.size();
+        int totalEligible = 0;
+        for (String ip : request.participantIPs) {
+            if (!"WITHDRAWN".equals(participantStatus.get(ip))) {
+                totalEligible++;
+            }
+        }
+        return responded.size() >= totalEligible;
     }
 
     public void markResponse(String ip, boolean accept) {

@@ -10,13 +10,13 @@ public class MeetingScheduler {
     private Receiver receiver;
     private DatagramSocket socket;
 
-    private Consumer<String> messageListener;  // 回调接口，用于 GUI 显示日志
+    private Consumer<String> messageListener;  // Callback for GUI log display
 
     /**
-     * 初始化调度器
-     * @param clientPort 客户端端口（如 9877）
-     * @param serverPort 服务器端口（如 9876）
-     * @param serverIP   服务器 IP 地址
+     * Initialize the scheduler
+     * @param clientPort Client port (e.g., 9877)
+     * @param serverPort Server port (e.g., 9876)
+     * @param serverIP   Server IP address
      */
     public MeetingScheduler(int clientPort, int serverPort, InetAddress serverIP) throws Exception {
         this.socket = new DatagramSocket(clientPort);
@@ -25,24 +25,24 @@ public class MeetingScheduler {
     }
 
     /**
-     * 启动发送器和接收器，并自动监听处理响应
+     * Start sender and receiver, and begin listening for responses
      */
     public void start() {
         sender.start();
         receiver.start();
 
-        // 启动后台线程监听来自服务器的消息
+        // Background thread to handle incoming messages
         new Thread(() -> {
             while (receiver.isRunning()) {
                 String message = receiver.receiveMessage();
                 if (message == null) continue;
 
-                // 通知 GUI（或日志系统）
+                // Notify GUI or logging system
                 if (messageListener != null) {
-                    messageListener.accept("📩 收到: " + message);
+                    messageListener.accept("📩 Received: " + message);
                 }
 
-                // 自动响应 INVITE
+                // Auto-respond to INVITE
                 if (message.startsWith("INVITE")) {
                     String[] parts = message.split(" ");
                     if (parts.length >= 2) {
@@ -50,14 +50,14 @@ public class MeetingScheduler {
                         String acceptMsg = "ACCEPT " + meetingId;
                         sender.sendMessage(acceptMsg);
                         if (messageListener != null)
-                            messageListener.accept("🟢 已自动发送: " + acceptMsg);
+                            messageListener.accept("🟢 Auto-sent: " + acceptMsg);
                     }
                 }
 
-                // 如果是最终消息
+                // If final message received
                 if (message.startsWith("CONFIRM") || message.startsWith("CANCEL")) {
                     if (messageListener != null)
-                        messageListener.accept("🏁 会议完成: " + message);
+                        messageListener.accept("🏁 Meeting finalized: " + message);
 //                    sender.stopRunning();
 //                    receiver.stopRunning();
                 }
@@ -66,7 +66,7 @@ public class MeetingScheduler {
     }
 
     /**
-     * 发送 BOOK 预定请求
+     * Send BOOK request
      */
     public void sendBookRequest(String requestID, String date, String time,
                                 String activity, List<String> ips, int min) {
@@ -76,32 +76,41 @@ public class MeetingScheduler {
         );
         sender.sendMessage(bookRequest);
         if (messageListener != null)
-            messageListener.accept("📤 已发送: " + bookRequest);
+            messageListener.accept("📤 Sent: " + bookRequest);
     }
 
+    /**
+     * Send CANCEL request
+     */
     public void sendCancelRequest(String meetingId) {
         String cancelMsg = "CANCEL " + meetingId;
         sender.sendMessage(cancelMsg);
         if (messageListener != null) {
-            messageListener.accept("📤 已发送: " + cancelMsg);
+            messageListener.accept("📤 Sent: " + cancelMsg);
         }
     }
+
+    /**
+     * Send ADD request
+     */
     public void sendAddRequest(String meetingId) {
         String addMsg = "ADD " + meetingId;
         sender.sendMessage(addMsg);
         if (messageListener != null) {
-            messageListener.accept("已发送 " + addMsg);
+            messageListener.accept("📤 Sent: " + addMsg);
         }
     }
 
-
     /**
-     * 设置监听器，将内部消息回传给 GUI 控制台或其他输出逻辑
+     * Set listener for passing messages back to GUI console or external output
      */
     public void addMessageListener(Consumer<String> listener) {
         this.messageListener = listener;
     }
 
+    /**
+     * Stop sender and receiver and close the socket
+     */
     public void stop() {
         sender.stopRunning();
         receiver.stopRunning();

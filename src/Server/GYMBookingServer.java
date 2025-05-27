@@ -63,15 +63,14 @@ public class GYMBookingServer {
     public void processAddRequest(String message, SocketAddress senderAddress) {
         String ip = senderAddress.toString();
         if (ip.startsWith("/")) {
-            ip = ip.substring(1); // 去掉前导斜杠
+            ip = ip.substring(1); // remove leading slash
         }
         String[] parts = message.trim().split(" ");
         String meetingId = parts[1];
         String room = RoomManager.getRoom(meetingId);
         MeetingStatus status = meetingMap.get(meetingId);
-        if (status.getRejected().contains(ip)){
-            String msg = String.format("CONFIRM %s %s",
-                    meetingId, room);
+        if (status.getRejected().contains(ip)) {
+            String msg = String.format("CONFIRM %s %s", meetingId, room);
             String hostMsg = String.format("ADDED %s %s", meetingId, senderAddress);
             sender.sendMessage(msg, senderAddress);
             sender.sendMessage(hostMsg, status.host);
@@ -132,24 +131,23 @@ public class GYMBookingServer {
 
             System.out.println("Organizer requested cancellation for " + meetingId);
 
-            // 通知所有已确认的参与者
+            // notify all accepted participants
             String cancelMsg = "CANCEL " + meetingId + " REASON:Cancelled by organizer";
             for (String ip : status.accepted) {
                 sender.sendMessage(cancelMsg, parseAddress(ip));
             }
 
-            // 移除会议室占用
-            System.out.println("removing");
+            // release assigned room
+            System.out.println("Releasing room for " + meetingId);
             RoomManager.removeRoom(meetingId);
 
-            // 清除会议记录
+            // clear meeting record
             meetingMap.remove(meetingId);
 
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-
 
     public void processInviteResponse(String message, SocketAddress senderAddress) {
         String[] parts = message.split(" ");
@@ -175,7 +173,7 @@ public class GYMBookingServer {
         status.finalized = true;
 
         BookingRequest req = status.request;
-        String roomName = null;
+        String roomName;
 
         if (status.accepted.size() >= req.minParticipants) {
             roomName = roomManager.assignRoom(req.date, req.time, status.meetingId);
@@ -201,7 +199,7 @@ public class GYMBookingServer {
         new Thread(() -> {
             try {
                 while (true) {
-                    // 等待下一轮前延迟一下（比如 300~500ms，给 finalize 完成时间）
+                    // delay briefly before next round (e.g. 300~500ms to allow finalize)
                     Thread.sleep(500);
 
                     if (status.finalized) {
@@ -215,7 +213,7 @@ public class GYMBookingServer {
                         break;
                     }
 
-                    // 再真正等待重发间隔
+                    // actual wait before resending INVITE
                     Thread.sleep(RETRY_INTERVAL_MS);
 
                     for (String ip : status.request.participantIPs) {
@@ -241,9 +239,9 @@ public class GYMBookingServer {
         }).start();
     }
 
-        public static InetSocketAddress parseAddress(String ip) {
+    public static InetSocketAddress parseAddress(String ip) {
         if (ip.startsWith("/")) {
-                ip = ip.substring(1); // 去掉前导斜杠
+            ip = ip.substring(1); // remove leading slash
         }
         String[] parts = ip.split(":");
         if (parts.length != 2) {

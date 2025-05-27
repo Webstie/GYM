@@ -32,7 +32,7 @@ public class GBMS_GUI extends Application {
     public void start(Stage primaryStage) {
         primaryStage.setTitle("Gym Booking Management System");
 
-        // 初始化调度器
+        // Initialize scheduler
         try {
             InetAddress serverIP = InetAddress.getByName("127.0.0.1");
             int clientPort = 9877;
@@ -58,13 +58,13 @@ public class GBMS_GUI extends Application {
 
         TabPane tabPane = new TabPane();
         tabPane.getTabs().addAll(
-                new Tab("预约活动", buildBookingTab()),
-                new Tab("取消活动", buildCancelTab()),
-                new Tab("添加活动", buildAddTab())
+                new Tab("Book Meeting", buildBookingTab()),
+                new Tab("Cancel Meeting", buildCancelTab()),
+                new Tab("Add Participant", buildAddTab())
         );
         tabPane.getTabs().forEach(tab -> tab.setClosable(false));
 
-        VBox root = new VBox(tabPane, new Label("控制台日志:"), console);
+        VBox root = new VBox(tabPane, new Label("Console Log:"), console);
         root.setPadding(new Insets(10));
         root.setSpacing(10);
 
@@ -79,22 +79,22 @@ public class GBMS_GUI extends Application {
         datePicker = new DatePicker();
         minParticipantsSpinner = new Spinner<>(1, 100, 2);
 
-        Button sendButton = new Button("发送 BOOK 请求");
+        Button sendButton = new Button("Send BOOK Request");
         sendButton.setOnAction(e -> sendBookingRequest());
 
         GridPane form = new GridPane();
         form.setPadding(new Insets(10));
         form.setVgap(8);
         form.setHgap(10);
-        form.add(new Label("活动类型:"), 0, 0);
+        form.add(new Label("Activity Type:"), 0, 0);
         form.add(activityField, 1, 0);
-        form.add(new Label("日期:"), 0, 1);
+        form.add(new Label("Date:"), 0, 1);
         form.add(datePicker, 1, 1);
-        form.add(new Label("时间(HH:MM):"), 0, 2);
+        form.add(new Label("Time (HH:MM):"), 0, 2);
         form.add(timeField, 1, 2);
-        form.add(new Label("参与者 IP（逗号分隔）:"), 0, 3);
+        form.add(new Label("Participant IPs (comma-separated):"), 0, 3);
         form.add(ipField, 1, 3);
-        form.add(new Label("最小参与人数:"), 0, 4);
+        form.add(new Label("Minimum Participants:"), 0, 4);
         form.add(minParticipantsSpinner, 1, 4);
         form.add(sendButton, 1, 5);
 
@@ -105,48 +105,47 @@ public class GBMS_GUI extends Application {
 
     private VBox buildCancelTab() {
         TextField meetingIdField = new TextField();
-        meetingIdField.setPromptText("例如：MT#2");
+        meetingIdField.setPromptText("e.g., MT#2");
 
-        Button cancelButton = new Button("发送 CANCEL 请求");
+        Button cancelButton = new Button("Send CANCEL Request");
         cancelButton.setOnAction(e -> {
             String meetingID = meetingIdField.getText().trim();
             if (meetingID.isEmpty()) {
-                console.appendText("⚠️ Meeting ID 不能为空\n");
+                console.appendText("⚠️ Meeting ID cannot be empty\n");
                 return;
             }
             sendCancelRequest(meetingID);
         });
 
-        VBox cancelLayout = new VBox(10, new Label("取消会议 ID:"), meetingIdField, cancelButton);
+        VBox cancelLayout = new VBox(10, new Label("Meeting ID to Cancel:"), meetingIdField, cancelButton);
         cancelLayout.setPadding(new Insets(10));
         return cancelLayout;
     }
 
     private VBox buildAddTab() {
         TextField meetingIdField = new TextField();
-        meetingIdField.setPromptText("例如：MT#2");
+        meetingIdField.setPromptText("e.g., MT#2");
 
-        Button addButton = new Button("发送 ADD 请求");
+        Button addButton = new Button("Send ADD Request");
         addButton.setOnAction(e -> {
             String meetingID = meetingIdField.getText().trim();
             if (meetingID.isEmpty()) {
-                console.appendText("⚠️ Meeting ID 不能为空\n");
+                console.appendText("⚠️ Meeting ID cannot be empty\n");
                 return;
             }
 
             new Thread(() -> {
                 scheduler.sendAddRequest(meetingID);
                 Platform.runLater(() -> {
-                    console.appendText("📤 已请求添加活动: " + meetingID + "\n");
+                    console.appendText("📤 Sent ADD request for: " + meetingID + "\n");
                 });
             }).start();
         });
 
-        VBox addLayout = new VBox(10, new Label("添加会议 ID:"), meetingIdField, addButton);
+        VBox addLayout = new VBox(10, new Label("Meeting ID to Add Participant:"), meetingIdField, addButton);
         addLayout.setPadding(new Insets(10));
         return addLayout;
     }
-
 
     private void sendBookingRequest() {
         String activity = activityField.getText().trim();
@@ -156,7 +155,7 @@ public class GBMS_GUI extends Application {
         int min = minParticipantsSpinner.getValue();
 
         if (activity.isEmpty() || date.isEmpty() || time.isEmpty() || ips.isEmpty()) {
-            console.appendText("⚠️ 请填写所有字段\n");
+            console.appendText("⚠️ Please fill out all fields\n");
             return;
         }
 
@@ -166,10 +165,10 @@ public class GBMS_GUI extends Application {
 
     public void sendCancelRequest(String meetingId) {
         new Thread(() -> {
-            scheduler.sendCancelRequest(meetingId); // 使用 MeetingScheduler 封装的方法
+            scheduler.sendCancelRequest(meetingId); // Use method in MeetingScheduler
 
             Platform.runLater(() -> {
-                console.appendText("📤 已请求取消会议: " + meetingId + "\n");
+                console.appendText("📤 Sent CANCEL request for: " + meetingId + "\n");
             });
         }).start();
     }

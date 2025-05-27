@@ -60,7 +60,8 @@ public class test_client extends Application {
         tabPane.getTabs().addAll(
                 new Tab("Book Meeting", buildBookingTab()),
                 new Tab("Cancel Meeting", buildCancelTab()),
-                new Tab("Add Participant", buildAddTab())
+                new Tab("Add Participant", buildAddTab()),
+                new Tab("Withdraw", buildWithdrawTab())
         );
         tabPane.getTabs().forEach(tab -> tab.setClosable(false));
 
@@ -146,6 +147,32 @@ public class test_client extends Application {
         addLayout.setPadding(new Insets(10));
         return addLayout;
     }
+
+    private VBox buildWithdrawTab() {
+        TextField meetingIdField = new TextField();
+        meetingIdField.setPromptText("e.g., MT#2");
+
+        Button withdrawButton = new Button("Send WITHDRAW Request");
+        withdrawButton.setOnAction(e -> {
+            String meetingID = meetingIdField.getText().trim();
+            if (meetingID.isEmpty()) {
+                console.appendText("⚠️ Meeting ID cannot be empty\n");
+                return;
+            }
+
+            new Thread(() -> {
+                scheduler.sendWithdrawRequest(meetingID);
+                Platform.runLater(() -> {
+                    console.appendText("📤 Sent WITHDRAW request for: " + meetingID + "\n");
+                });
+            }).start();
+        });
+
+        VBox withdrawLayout = new VBox(10, new Label("Meeting ID to Withdraw From:"), meetingIdField, withdrawButton);
+        withdrawLayout.setPadding(new Insets(10));
+        return withdrawLayout;
+    }
+
 
     private void sendBookingRequest() {
         String activity = activityField.getText().trim();

@@ -86,6 +86,13 @@ public class MeetingScheduler {
             messageListener.accept("📤 已发送: " + cancelMsg);
         }
     }
+    public void sendAddRequest(String meetingId) {
+        String addMsg = "ADD " + meetingId;
+        sender.sendMessage(addMsg);
+        if (messageListener != null) {
+            messageListener.accept("已发送 " + addMsg);
+        }
+    }
 
 
     /**

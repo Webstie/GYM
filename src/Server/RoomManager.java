@@ -19,8 +19,7 @@ public class RoomManager {
     /**
      * Assigns and reserves an available room. Ignores date/time, keeps signature for compatibility.
      */
-    public synchronized String assignRoom(String date, String time) {
-        String meetingId = "MT#" + (meetingToRoom.size() + 1); // or pass externally
+    public synchronized String assignRoom(String date, String time, String meetingId) {
         for (String room : roomList) {
             if (!meetingToRoom.containsValue(room)) {
                 meetingToRoom.put(meetingId, room);

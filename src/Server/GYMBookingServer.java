@@ -13,6 +13,7 @@ public class GYMBookingServer {
     private RoomManager roomManager;
     private Receiver receiver;
     private Map<String, MeetingStatus> meetingMap = new HashMap<>();
+    public Map<String, String> participantStatus = new HashMap<>();
     private int meetingCounter = 1;
 
     public static void main(String[] args) throws Exception {
@@ -50,11 +51,30 @@ public class GYMBookingServer {
             }
         } else if (message.startsWith("CANCEL")) {
             processCancelRequest(message);
-
+        } else if (message.startsWith("ADD")) {
+            processAddRequest(message, senderAddress);
         } else if (message.startsWith("ACCEPT") || message.startsWith("REJECT")) {
             processInviteResponse(message, senderAddress);
         } else {
             System.out.println("Received unknown message format: " + message);
+        }
+    }
+
+    public void processAddRequest(String message, SocketAddress senderAddress) {
+        String ip = senderAddress.toString();
+        if (ip.startsWith("/")) {
+            ip = ip.substring(1); // 去掉前导斜杠
+        }
+        String[] parts = message.trim().split(" ");
+        String meetingId = parts[1];
+        String room = RoomManager.getRoom(meetingId);
+        MeetingStatus status = meetingMap.get(meetingId);
+        if (status.getRejected().contains(ip)){
+            String msg = String.format("CONFIRM %s %s",
+                    meetingId, room);
+            String hostMsg = String.format("ADDED %s %s", meetingId, senderAddress);
+            sender.sendMessage(msg, senderAddress);
+            sender.sendMessage(hostMsg, status.host);
         }
     }
 
@@ -65,14 +85,13 @@ public class GYMBookingServer {
             String date = parts[2].split(":")[1];
             String time = parts[3].split(":")[1];
             String activity = parts[4].split(":")[1];
-            String[] ips = parts[5].split(":")[1].split(",");
+            String ip = parts[5].substring(parts[5].indexOf(':') + 1);
+            String[] ips = ip.split(",");
             int min = Integer.parseInt(parts[6].split(":")[1]);
             List<String> participantIPs = Arrays.asList(ips);
 
             String requesterIP = senderAddress.toString();
             if (requesterIP.startsWith("/")) requesterIP = requesterIP.substring(1);
-            requesterIP = requesterIP.split(":")[0];
-
             return new BookingRequest(requestId, date, time, activity, participantIPs, min, requesterIP);
         } catch (Exception e) {
             System.out.println("Failed to parse BOOK request: " + message);
@@ -84,18 +103,19 @@ public class GYMBookingServer {
     public void processBookingRequest(BookingRequest request) {
         if (!roomManager.isRoomAvailable(request.date, request.time)) {
             String msg = "UNAVAILABLE RQ#" + request.requestId;
-            sender.sendMessage(msg, new InetSocketAddress(request.requesterIP, 9877));
+            sender.sendMessage(msg, parseAddress(request.requesterIP));
             return;
         }
 
         String meetingId = "MT#" + (meetingCounter++);
         MeetingStatus status = new MeetingStatus(meetingId, request);
+        status.nameHost(request.requesterIP);
         meetingMap.put(meetingId, status);
 
         for (String ip : request.participantIPs) {
             String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s",
                     meetingId, request.date, request.time, request.activityType, request.requesterIP);
-            sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
+            sender.sendMessage(msg, parseAddress(ip));
         }
 
         startInviteResponseTimer(meetingId);
@@ -115,10 +135,11 @@ public class GYMBookingServer {
             // 通知所有已确认的参与者
             String cancelMsg = "CANCEL " + meetingId + " REASON:Cancelled by organizer";
             for (String ip : status.accepted) {
-                sender.sendMessage(cancelMsg, new InetSocketAddress(ip, 9877));
+                sender.sendMessage(cancelMsg, parseAddress(ip));
             }
 
             // 移除会议室占用
+            System.out.println("removing");
             RoomManager.removeRoom(meetingId);
 
             // 清除会议记录
@@ -139,7 +160,7 @@ public class GYMBookingServer {
         MeetingStatus status = meetingMap.get(meetingId);
         if (status == null) return;
 
-        String ip = senderAddress.toString().replace("/", "").split(":")[0];
+        String ip = senderAddress.toString();
         if (status.responded.contains(ip)) return;
 
         status.markResponse(ip, responseType.equals("ACCEPT"));
@@ -157,17 +178,17 @@ public class GYMBookingServer {
         String roomName = null;
 
         if (status.accepted.size() >= req.minParticipants) {
-            roomName = roomManager.assignRoom(req.date, req.time);
+            roomName = roomManager.assignRoom(req.date, req.time, status.meetingId);
             String msg = String.format("CONFIRM %s ROOM:%s PARTICIPANTS:%s",
                     status.meetingId, roomName, String.join(",", status.accepted));
             for (String ip : status.accepted) {
-                sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
+                sender.sendMessage(msg, parseAddress(ip));
             }
         } else {
             String msg = String.format("CANCEL %s REASON:Number of participants is lower than minimum required PARTICIPANTS:%s",
                     status.meetingId, String.join(",", status.accepted));
             for (String ip : status.accepted) {
-                sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
+                sender.sendMessage(msg, parseAddress(ip));
             }
             meetingMap.remove(status.meetingId);
         }
@@ -179,13 +200,30 @@ public class GYMBookingServer {
 
         new Thread(() -> {
             try {
-                while (!status.allResponded()) {
+                while (true) {
+                    // 等待下一轮前延迟一下（比如 300~500ms，给 finalize 完成时间）
+                    Thread.sleep(500);
+
+                    if (status.finalized) {
+                        System.out.println("⛔ Meeting " + meetingId + " already finalized. Stopping retry loop.");
+                        break;
+                    }
+
+                    if (status.allResponded()) {
+                        System.out.println("✅ All responded for " + meetingId + ". Finishing decision.");
+                        finishMeetingDecision(status);
+                        break;
+                    }
+
+                    // 再真正等待重发间隔
                     Thread.sleep(RETRY_INTERVAL_MS);
+
                     for (String ip : status.request.participantIPs) {
                         if (status.responded.contains(ip)) continue;
+
                         int retry = status.retryCount.getOrDefault(ip, 0);
                         if (retry >= MAX_RETRY) {
-                            System.out.println("Max retries reached, treating as rejection: " + ip);
+                            System.out.println("⚠️ Max retries for " + ip + ". Marking as rejected.");
                             status.markResponse(ip, false);
                             continue;
                         }
@@ -193,18 +231,24 @@ public class GYMBookingServer {
                         String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s",
                                 status.meetingId, status.request.date, status.request.time,
                                 status.request.activityType, status.request.requesterIP);
-                        sender.sendMessage(msg, new InetSocketAddress(ip, 9877));
+                        sender.sendMessage(msg, GYMBookingServer.parseAddress(ip));
                         status.retryCount.put(ip, retry + 1);
-                    }
-
-                    if (status.allResponded()) {
-                        finishMeetingDecision(status);
-                        break;
                     }
                 }
             } catch (InterruptedException e) {
-                System.err.println("Retry thread interrupted: " + e.getMessage());
+                System.err.println("❌ Retry thread interrupted for " + meetingId);
             }
         }).start();
+    }
+
+        public static InetSocketAddress parseAddress(String ip) {
+        if (ip.startsWith("/")) {
+                ip = ip.substring(1); // 去掉前导斜杠
+        }
+        String[] parts = ip.split(":");
+        if (parts.length != 2) {
+            throw new IllegalArgumentException("Invalid IP:Port format: " + ip);
+        }
+        return new InetSocketAddress(parts[0], Integer.parseInt(parts[1]));
     }
 }

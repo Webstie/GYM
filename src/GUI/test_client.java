@@ -13,7 +13,7 @@ import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.List;
 
-public class GBMS_GUI extends Application {
+public class test_client extends Application {
 
     private TextField activityField;
     private DatePicker datePicker;
@@ -35,7 +35,7 @@ public class GBMS_GUI extends Application {
         // 初始化调度器
         try {
             InetAddress serverIP = InetAddress.getByName("127.0.0.1");
-            int clientPort = 9877;
+            int clientPort = 9878;
             int serverPort = 9876;
 
             scheduler = new MeetingScheduler(clientPort, serverPort, serverIP);
@@ -174,3 +174,4 @@ public class GBMS_GUI extends Application {
         }).start();
     }
 }
+

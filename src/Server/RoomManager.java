@@ -4,8 +4,7 @@ import java.util.*;
 
 public class RoomManager {
     // Static room list
-    private static final List<String> roomList = Arrays.asList("GymA", "GymB", "GymC");
-
+    private static final List<String> roomList = new ArrayList<>(Arrays.asList("GymA", "GymB", "GymC"));
     // key = meetingId, value = assigned room
     private static final Map<String, String> meetingToRoom = new HashMap<>();
 
@@ -38,6 +37,19 @@ public class RoomManager {
         String room = meetingToRoom.remove(meetingId);
         System.out.println("Room " + room + " released from meeting " + meetingId);
     }
+
+    public static synchronized String makeUnavailableByRoomName(String roomName) {
+        roomList.remove(roomName);
+        for (Map.Entry<String, String> entry : meetingToRoom.entrySet()) {
+            if (entry.getValue().equals(roomName)) {
+                String meetingId = entry.getKey();
+                meetingToRoom.remove(meetingId);
+                return meetingId;  // Return the affected meeting ID
+            }
+        }
+        return null;  // No match found
+    }
+
 
     /**
      * Optional: get room by meeting ID

@@ -23,7 +23,10 @@ public class GYMBookingServer {
         GYMBookingServer server = new GYMBookingServer(socket);
         System.out.println("GBMS started, listening on port: " + port);
         server.start();
+        Thread.sleep(10000);
+        server.makeRoomUnavailable("GymA");
     }
+
 
     public GYMBookingServer(DatagramSocket socket) {
         this.socket = socket;
@@ -249,4 +252,37 @@ public class GYMBookingServer {
         }
         return new InetSocketAddress(parts[0], Integer.parseInt(parts[1]));
     }
+
+    public void makeRoomUnavailable(String roomName) {
+        String meetingId = RoomManager.makeUnavailableByRoomName(roomName);
+
+        if (meetingId == null) {
+            System.out.println("⚠️ No meeting is currently using room " + roomName);
+            return;
+        }
+
+        MeetingStatus status = meetingMap.get(meetingId);
+        if (status == null || !status.finalized) {
+            System.out.println("⚠️ Meeting " + meetingId + " not found or not finalized");
+            return;
+        }
+
+        String newRoom = roomManager.assignRoom(status.request.date, status.request.time, meetingId);
+
+        if (newRoom != null) {
+            String msg = String.format("ROOM_CHANGE %s NEW_ROOM#%s", meetingId, newRoom);
+            for (String ip : status.accepted) {
+                sender.sendMessage(msg, parseAddress(ip));
+            }
+            System.out.println("✅ ROOM_CHANGE sent for " + meetingId);
+        } else {
+            String cancelMsg = String.format("CANCEL %s REASON:Room unavailable and no alternatives", meetingId);
+            for (String ip : status.accepted) {
+                sender.sendMessage(cancelMsg, parseAddress(ip));
+            }
+            meetingMap.remove(meetingId);
+            System.out.println("❌ Meeting " + meetingId + " canceled due to no replacement rooms");
+        }
+    }
+
 }

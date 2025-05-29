@@ -10,11 +10,10 @@ import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
 import java.net.InetAddress;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
+import java.util.function.Consumer;
 
 public class GBMS_GUI extends Application {
-
     private TextField activityField;
     private DatePicker datePicker;
     private TextField timeField;
@@ -29,28 +28,24 @@ public class GBMS_GUI extends Application {
     }
 
     @Override
-    public void start(Stage primaryStage) {
+    public void start(Stage primaryStage) throws Exception {
         primaryStage.setTitle("Gym Booking Management System");
 
-        // Initialize scheduler
-        try {
-            InetAddress serverIP = InetAddress.getByName("127.0.0.1");
-            int clientPort = 9877;
-            int serverPort = 9876;
+        // 初始化 scheduler
+        InetAddress serverIP = InetAddress.getByName("127.0.0.1");
+        int clientPort = 9877;
+        int serverPort = 9876;
+        scheduler = new MeetingScheduler(clientPort, serverPort, serverIP);
 
-            scheduler = new MeetingScheduler(clientPort, serverPort, serverIP);
-            scheduler.addMessageListener(msg -> Platform.runLater(() -> {
-                if (msg == null) {
-                    console.appendText("[null message received]\n");
-                } else {
-                    console.appendText(msg + "\n");
-                }
-            }));
-            scheduler.start();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return;
-        }
+        // 设置弹窗 handler
+        scheduler.setPopupHandler((info, callback) -> showAcceptRejectPopup(info, callback));
+
+        // 控制台日志回调
+        scheduler.addMessageListener(msg -> Platform.runLater(() -> {
+            if (msg == null) console.appendText("[null message]\n");
+            else console.appendText(msg + "\n");
+        }));
+        scheduler.start();
 
         console = new TextArea();
         console.setEditable(false);
@@ -91,7 +86,7 @@ public class GBMS_GUI extends Application {
         form.add(activityField, 1, 0);
         form.add(new Label("Date:"), 0, 1);
         form.add(datePicker, 1, 1);
-        form.add(new Label("Time (HH:MM):"), 0, 2);
+        form.add(new Label("Time (HH-HH):"), 0, 2);
         form.add(timeField, 1, 2);
         form.add(new Label("Participant IPs (comma-separated):"), 0, 3);
         form.add(ipField, 1, 3);
@@ -99,28 +94,14 @@ public class GBMS_GUI extends Application {
         form.add(minParticipantsSpinner, 1, 4);
         form.add(sendButton, 1, 5);
 
-        VBox layout = new VBox(10, form);
-        layout.setPadding(new Insets(10));
-        return layout;
+        return new VBox(10, form);
     }
 
     private VBox buildCancelTab() {
         TextField meetingIdField = new TextField();
-        meetingIdField.setPromptText("e.g., MT#2");
-
         Button cancelButton = new Button("Send CANCEL Request");
-        cancelButton.setOnAction(e -> {
-            String meetingID = meetingIdField.getText().trim();
-            if (meetingID.isEmpty()) {
-                console.appendText("⚠️ Meeting ID cannot be empty\n");
-                return;
-            }
-            sendCancelRequest(meetingID);
-        });
-
-        VBox cancelLayout = new VBox(10, new Label("Meeting ID to Cancel:"), meetingIdField, cancelButton);
-        cancelLayout.setPadding(new Insets(10));
-        return cancelLayout;
+        cancelButton.setOnAction(e -> sendCancelRequest(meetingIdField.getText().trim()));
+        return new VBox(10, new Label("Meeting ID to Cancel:"), meetingIdField, cancelButton);
     }
 
     private VBox buildAddTab() {
@@ -173,7 +154,6 @@ public class GBMS_GUI extends Application {
         return withdrawLayout;
     }
 
-
     private void sendBookingRequest() {
         String activity = activityField.getText().trim();
         String date = datePicker.getValue() != null ? datePicker.getValue().toString() : "";
@@ -185,18 +165,25 @@ public class GBMS_GUI extends Application {
             console.appendText("⚠️ Please fill out all fields\n");
             return;
         }
-
         String requestId = "RQ#" + (bookingIdCounter++);
         scheduler.sendBookRequest(requestId, date, time, activity, ips, min);
     }
 
     public void sendCancelRequest(String meetingId) {
         new Thread(() -> {
-            scheduler.sendCancelRequest(meetingId); // Use method in MeetingScheduler
-
-            Platform.runLater(() -> {
-                console.appendText("📤 Sent CANCEL request for: " + meetingId + "\n");
-            });
+            scheduler.sendCancelRequest(meetingId);
+            Platform.runLater(() -> console.appendText("📤 Sent CANCEL request for: " + meetingId + "\n"));
         }).start();
+    }
+
+    public void showAcceptRejectPopup(String info, Consumer<Boolean> callback) {
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Meeting Invitation");
+            alert.setHeaderText("New Invite");
+            alert.setContentText(info);
+            Optional<ButtonType> result = alert.showAndWait();
+            callback.accept(result.isPresent() && result.get() == ButtonType.OK);
+        });
     }
 }

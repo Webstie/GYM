@@ -6,7 +6,7 @@ import java.util.*;
 public class GYMBookingServer {
 
     private static final int MAX_RETRY = 3;
-    private static final int RETRY_INTERVAL_MS = 50;
+    private static final int RETRY_INTERVAL_MS = 10000;
 
     private DatagramSocket socket;
     private Sender sender;
@@ -79,6 +79,8 @@ public class GYMBookingServer {
         status.accepted.remove(ip);
         status.responded.remove(ip);
         status.participantStatus.replace(ip, "WITHDRAWN");
+        String msgUser = String.format("WITHDRAWN %s IP:%s", meetingId, senderAddress);
+        sender.sendMessage(msgUser, senderAddress);
 
         // 2. Notify host
         String notifyMsg = String.format("WITHDRAW_NOTIFY %s FROM:%s", meetingId, ip);
@@ -95,9 +97,9 @@ public class GYMBookingServer {
                 status.retryCount.put(candidate, 0);
                 status.responded.remove(candidate);
 
-                String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s",
+                String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s PARTICIPANT:%s",
                         meetingId, status.request.date, status.request.time,
-                        status.request.activityType, status.request.requesterIP);
+                        status.request.activityType, status.request.requesterIP, status.request.participantIPs);
                 sender.sendMessage(msg, parseAddress(candidate));
             }
         }
@@ -116,7 +118,9 @@ public class GYMBookingServer {
         MeetingStatus status = meetingMap.get(meetingId);
         if (status.getRejected().contains(ip)) {
             String msg = String.format("CONFIRM %s %s", meetingId, room);
+            String msgAdd = String.format("ADDED %s IP:%s", meetingId, senderAddress);
             String hostMsg = String.format("ADDED %s %s", meetingId, senderAddress);
+            sender.sendMessage(msgAdd, senderAddress);
             sender.sendMessage(msg, senderAddress);
             sender.sendMessage(hostMsg, status.host);
         }
@@ -157,8 +161,8 @@ public class GYMBookingServer {
         meetingMap.put(meetingId, status);
 
         for (String ip : request.participantIPs) {
-            String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s",
-                    meetingId, request.date, request.time, request.activityType, request.requesterIP);
+            String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s PARTICIPANT:%s",
+                    meetingId, request.date, request.time, request.activityType, request.requesterIP, request.participantIPs);
             sender.sendMessage(msg, parseAddress(ip));
         }
 
@@ -271,9 +275,9 @@ public class GYMBookingServer {
                             continue;
                         }
 
-                        String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s",
+                        String msg = String.format("INVITE %s DATE:%s TIME:%s TYPE:%s REQUESTER:%s PARTICIPANTS:%s",
                                 status.meetingId, status.request.date, status.request.time,
-                                status.request.activityType, status.request.requesterIP);
+                                status.request.activityType, status.request.requesterIP, status.request.participantIPs);
                         sender.sendMessage(msg, GYMBookingServer.parseAddress(ip));
                         status.retryCount.put(ip, retry + 1);
                     }

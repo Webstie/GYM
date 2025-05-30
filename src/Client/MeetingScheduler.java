@@ -54,14 +54,24 @@ public class MeetingScheduler {
                         String[] timeParts = timeRange.split("-");
                         int startTime = Integer.parseInt(timeParts[0]);
                         int endTime = Integer.parseInt(timeParts[1]);
-                        String participantsRaw = extractValue(message, "PARTICIPANTS");
-                        List<String> participantIPs = new ArrayList<>();
-                        participantIPs = Arrays.asList(participantsRaw.split(","));
+                        String participantsRaw = extractValue(message, "PARTICIPANT");
+                        System.out.println("SMMFMFMMFOBVIOUS");
+                        System.out.println(participantsRaw);
+                        if (participantsRaw.startsWith("[") && participantsRaw.endsWith("]")) {
+                            participantsRaw = participantsRaw.substring(1, participantsRaw.length() - 1);
+                        }
+                        System.out.println(participantsRaw);
 
-
+                        List<String> participantIPs = Arrays.asList(participantsRaw.split(","))
+                                .stream()
+                                .map(String::trim)
+                                .toList();
+                        System.out.println(participantsRaw);
                         ObjectMapper mapper = new ObjectMapper();
-                        File scheduleFile = new File("/Users/charles/Documents/Computer/Java/GYM/GYM/src/Client/Schedule.Json");
+                        File scheduleFile = new File("src/Client/Schedule.Json");
                         List<TimeSlot> schedule = new ArrayList<>();
+                        System.out.println(scheduleFile.exists());
+                        System.out.println(scheduleFile.getAbsolutePath());
                         if (scheduleFile.exists()) {
                             try {
                                 schedule = mapper.readValue(scheduleFile, new TypeReference<List<TimeSlot>>() {});
@@ -69,14 +79,17 @@ public class MeetingScheduler {
                                 throw new RuntimeException(e);
                             }
                         }
+                        System.out.println(schedule);
 
                         boolean hasConflict = false;
+                        System.out.println(schedule.isEmpty());
                         for (TimeSlot slot : schedule) {
                             if (slot.overlapsWith(date, startTime, endTime)) {
                                 hasConflict = true;
                                 break;
                             }
                         }
+                        System.out.println(hasConflict);
 
                         final List<TimeSlot> finalSchedule = schedule;
 
@@ -97,6 +110,7 @@ public class MeetingScheduler {
                                             messageListener.accept("🟢 User accepted: " + acceptMsg);
 
                                         finalSchedule.add(new TimeSlot(date, startTime, endTime, meetingId, finalParticipantIPs));
+                                        System.out.println("Written into Json");
                                         try {
                                             mapper.writeValue(scheduleFile, finalSchedule);
                                         } catch (IOException e) {
@@ -121,7 +135,7 @@ public class MeetingScheduler {
                     String meetingId = message.split(" ")[1];  // e.g. CANCEL MT#2
 
                     try {
-                        File scheduleFile = new File("/Users/charles/Documents/Computer/Java/GYM/GYM/src/Client/Schedule.Json");
+                        File scheduleFile = new File("src/Client/Schedule.Json");
                         ObjectMapper mapper = new ObjectMapper();
                         List<TimeSlot> schedule = new ArrayList<>();
 
@@ -150,9 +164,12 @@ public class MeetingScheduler {
                     String[] parts = message.split(" ");
                     String meetingId = parts[1];
                     String ip = extractValue(message, "IP");
+                    if (ip.startsWith("/")) {
+                        ip = ip.substring(1); // remove leading slash
+                    }
 
                     try {
-                        File scheduleFile = new File("/Users/charles/Documents/Computer/Java/GYM/GYM/src/Client/Schedule.Json");
+                        File scheduleFile = new File("src/Client/Schedule.Json");
                         ObjectMapper mapper = new ObjectMapper();
                         List<TimeSlot> schedule = new ArrayList<>();
 
@@ -186,20 +203,26 @@ public class MeetingScheduler {
                     String[] parts = message.split(" ");
                     String meetingId = parts[1];
                     String ip = extractValue(message, "IP");
+                    if (ip.startsWith("/")) {
+                        ip = ip.substring(1); // remove leading slash
+                    }
+
 
                     try {
-                        File scheduleFile = new File("/Users/charles/Documents/Computer/Java/GYM/GYM/src/Client/Schedule.Json");
+                        File scheduleFile = new File("src/Client/Schedule.Json");
                         ObjectMapper mapper = new ObjectMapper();
                         List<TimeSlot> schedule = new ArrayList<>();
 
                         if (scheduleFile.exists()) {
                             schedule = mapper.readValue(scheduleFile, new TypeReference<List<TimeSlot>>() {});
                         }
-
                         boolean updated = false;
                         for (TimeSlot slot : schedule) {
+                            System.out.println(slot.participantIPs);
+                            System.out.println(ip);
                             if (slot.meetingId.equals(meetingId)) {
                                 if (slot.participantIPs.remove(ip)) {
+
                                     updated = true;
                                 }
                                 break;
@@ -271,10 +294,10 @@ public class MeetingScheduler {
     }
 
     public static String extractValue(String message, String key) {
-        for (String part : message.split(" ")) {
-            if (part.startsWith(key + ":")) {
-                return part.substring((key + ":").length());
-            }
+        String pattern = key + ":(\\[[^\\]]*\\]|[^ ]+)";
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(pattern).matcher(message);
+        if (matcher.find()) {
+            return matcher.group(1);
         }
         return "";
     }

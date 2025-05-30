@@ -6,7 +6,7 @@ import java.util.*;
 public class GYMBookingServer {
 
     private static final int MAX_RETRY = 3;
-    private static final int RETRY_INTERVAL_MS = 10000;
+    private static final int RETRY_INTERVAL_MS = 3000;
 
     private DatagramSocket socket;
     private Sender sender;
@@ -112,7 +112,9 @@ public class GYMBookingServer {
         if (ip.startsWith("/")) {
             ip = ip.substring(1); // remove leading slash
         }
+        System.out.println(message);
         String[] parts = message.trim().split(" ");
+        System.out.println(parts[1]);
         String meetingId = parts[1];
         String room = RoomManager.getRoom(meetingId);
         MeetingStatus status = meetingMap.get(meetingId);

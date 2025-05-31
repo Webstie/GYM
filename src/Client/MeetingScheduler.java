@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -55,23 +56,16 @@ public class MeetingScheduler {
                         int startTime = Integer.parseInt(timeParts[0]);
                         int endTime = Integer.parseInt(timeParts[1]);
                         String participantsRaw = extractValue(message, "PARTICIPANT");
-                        System.out.println("SMMFMFMMFOBVIOUS");
-                        System.out.println(participantsRaw);
                         if (participantsRaw.startsWith("[") && participantsRaw.endsWith("]")) {
                             participantsRaw = participantsRaw.substring(1, participantsRaw.length() - 1);
                         }
-                        System.out.println(participantsRaw);
-
-                        List<String> participantIPs = Arrays.asList(participantsRaw.split(","))
-                                .stream()
+                        List<String> participantIPs = Arrays.stream(participantsRaw.split(","))
                                 .map(String::trim)
+                                .filter(s -> !s.isEmpty()) // 🔧 防止空字符串
                                 .toList();
-                        System.out.println(participantsRaw);
                         ObjectMapper mapper = new ObjectMapper();
                         File scheduleFile = new File("src/Client/Schedule.Json");
                         List<TimeSlot> schedule = new ArrayList<>();
-                        System.out.println(scheduleFile.exists());
-                        System.out.println(scheduleFile.getAbsolutePath());
                         if (scheduleFile.exists()) {
                             try {
                                 schedule = mapper.readValue(scheduleFile, new TypeReference<List<TimeSlot>>() {});
@@ -103,20 +97,43 @@ public class MeetingScheduler {
                             if (popupHandler != null) {
                                 List<String> finalParticipantIPs = participantIPs;
                                 popupHandler.accept(info, (userAccepted) -> {
+//                                    if (userAccepted) {
+//                                        String acceptMsg = "ACCEPT " + meetingId;
+//                                        sender.sendMessage(acceptMsg);
+//                                        if (messageListener != null)
+//                                            messageListener.accept("🟢 User accepted: " + acceptMsg);
+//
+//                                        finalSchedule.add(new TimeSlot(date, startTime, endTime, meetingId, finalParticipantIPs));
+//                                        System.out.println("Written into Json");
+//                                        try {
+//                                            mapper.writeValue(scheduleFile, finalSchedule);
+//                                        } catch (IOException e) {
+//                                            throw new RuntimeException("❌ Failed to write schedule.json", e);
+//                                        }
+//                                    } else {
                                     if (userAccepted) {
                                         String acceptMsg = "ACCEPT " + meetingId;
                                         sender.sendMessage(acceptMsg);
                                         if (messageListener != null)
                                             messageListener.accept("🟢 User accepted: " + acceptMsg);
 
-                                        finalSchedule.add(new TimeSlot(date, startTime, endTime, meetingId, finalParticipantIPs));
+                                        // ✅ 只记录本机 IP
+                                        String ip = socket.getLocalAddress().getHostAddress();
+                                        if (ip.equals("0:0:0:0:0:0:0:0") || ip.equals("::")) {
+                                            ip = "127.0.0.1";
+                                        }
+                                        String ipWithPort = ip + ":" + socket.getLocalPort();
+                                        List<String> acceptedOnly = List.of(ipWithPort);
+
+
+                                        finalSchedule.add(new TimeSlot(date, startTime, endTime, meetingId, acceptedOnly));
                                         System.out.println("Written into Json");
                                         try {
                                             mapper.writeValue(scheduleFile, finalSchedule);
                                         } catch (IOException e) {
                                             throw new RuntimeException("❌ Failed to write schedule.json", e);
                                         }
-                                    } else {
+                                    }else{
                                         String rejectMsg = "REJECT " + meetingId;
                                         sender.sendMessage(rejectMsg);
                                         if (messageListener != null)
@@ -164,6 +181,7 @@ public class MeetingScheduler {
                     String[] parts = message.split(" ");
                     String meetingId = parts[1];
                     String ip = extractValue(message, "IP");
+                    System.out.println("stuff");
                     if (ip.startsWith("/")) {
                         ip = ip.substring(1); // remove leading slash
                     }
@@ -178,16 +196,18 @@ public class MeetingScheduler {
                         }
 
                         boolean updated = false;
-                        for (TimeSlot slot : schedule) {
-                            if (slot.meetingId.equals(meetingId)) {
-                                if (!slot.participantIPs.contains(ip)) {
-                                    slot.participantIPs.add(ip);
-                                    updated = true;
+
+                        if(ip != null && !ip.isEmpty()) {
+                            for (TimeSlot slot : schedule) {
+                                if (slot.meetingId.equals(meetingId)) {
+                                    if (!slot.participantIPs.contains(ip)) {
+                                        slot.participantIPs.add(ip);
+                                        updated = true;
+                                    }
+                                    break;
                                 }
-                                break;
                             }
                         }
-
                         if (updated) {
                             mapper.writeValue(scheduleFile, schedule);
                             if (messageListener != null)

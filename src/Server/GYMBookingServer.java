@@ -112,13 +112,13 @@ public class GYMBookingServer {
         if (ip.startsWith("/")) {
             ip = ip.substring(1); // remove leading slash
         }
-        System.out.println(message);
         String[] parts = message.trim().split(" ");
-        System.out.println(parts[1]);
         String meetingId = parts[1];
         String room = RoomManager.getRoom(meetingId);
         MeetingStatus status = meetingMap.get(meetingId);
         if (status.getRejected().contains(ip)) {
+            status.rejected.remove(ip);
+            status.accepted.add(ip);
             String msg = String.format("CONFIRM %s %s", meetingId, room);
             String msgAdd = String.format("ADDED %s IP:%s", meetingId, senderAddress);
             String hostMsg = String.format("ADDED %s %s", meetingId, senderAddress);
